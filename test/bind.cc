@@ -8,6 +8,8 @@ int add(int num1, int num2)
 
 int main()
 {
+    auto f = &add;
+    f(11, 22);
     auto functor = std::bind(add, 11, 22);
     auto functor2 = std::bind(add, 11, std::placeholders::_1);
     std::cout << functor() << std::endl;
