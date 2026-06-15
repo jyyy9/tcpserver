@@ -43,6 +43,4 @@ namespace net{
         private:
             int64_t _microSecondsSinceEpoch;
     };
-
-    bool operator<()
 }
