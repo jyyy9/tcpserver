@@ -15,6 +15,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <fstream>
 
 namespace proto {
 namespace http {
@@ -44,7 +45,7 @@ namespace http {
     //src-编码前的字符串；  dst：编码后的字符串； convert_space_to_plus-是否转换空格-用于查询字符串
     static inline bool urlEncode(const std::string &src, 
             std::string &dst, 
-            bool convert_space_to_plus) {
+            bool convert_slash) {
             // 清空目标字符串
             dst.clear();
             // 预分配内存以提高性能（通常编码后长度会增加）
@@ -53,14 +54,11 @@ namespace http {
             const std::string reserved_chars = "!*'();:@&=+$,/?#[] ";
             for (unsigned char c : src) {
                 // 处理空格
-                if (c == ' ') {
-                    if (convert_space_to_plus) {
-                        dst += '+';
-                    } else {
-                        // 将空格编码为 %20
-                        dst += "%20";
-                    }
-                    continue;
+                if (c == '/') {
+                    if (convert_slash == false) {
+                        dst += c;
+                        continue;
+                    } 
                 }
                 // 检查是否需要编码
                 // 字母、数字、连字符、下划线、点、波浪线不需要编码
@@ -81,7 +79,8 @@ namespace http {
     //src-解码前的字符串；  dst：解码后的字符串； convert_space_to_plus-是否转换空格-用于查询字符串
     static inline bool urlDecode(const std::string &src, 
         std::string &dst, 
-        bool convert_plus_to_space) {
+        bool convert_slash) {
+        // LOG_DEBUG("urlDecode： %s", src.c_str());
         // 清空目标字符串
         dst.clear();
         // 预分配内存
@@ -89,8 +88,8 @@ namespace http {
         for (size_t i = 0; i < src.length(); ++i) {
             unsigned char c = src[i];
             // 处理加号（如果配置为转换为空格）
-            if (c == '+' && convert_plus_to_space) {
-                dst += ' ';
+            if (c == '/' && convert_slash == false) {
+                dst += c;
                 continue;
             }
             // 处理百分号编码
@@ -236,6 +235,138 @@ namespace http {
             }
         }
         return true;
+    }
+    static const std::unordered_map<int, std::string> _status_msg = {
+        {100,  "Continue"},
+        {101,  "Switching Protocol"},
+        {102,  "Processing"},
+        {103,  "Early Hints"},
+        {200,  "OK"},
+        {201,  "Created"},
+        {202,  "Accepted"},
+        {203,  "Non-Authoritative Information"},
+        {204,  "No Content"},
+        {205,  "Reset Content"},
+        {206,  "Partial Content"},
+        {207,  "Multi-Status"},
+        {208,  "Already Reported"},
+        {226,  "IM Used"},
+        {300,  "Multiple Choice"},
+        {301,  "Moved Permanently"},
+        {302,  "Found"},
+        {303,  "See Other"},
+        {304,  "Not Modified"},
+        {305,  "Use Proxy"},
+        {306,  "unused"},
+        {307,  "Temporary Redirect"},
+        {308,  "Permanent Redirect"},
+        {400,  "Bad Request"},
+        {401,  "Unauthorized"},
+        {402,  "Payment Required"},
+        {403,  "Forbidden"},
+        {404,  "Not Found"},
+        {405,  "Method Not Allowed"},
+        {406,  "Not Acceptable"},
+        {407,  "Proxy Authentication Required"},
+        {408,  "Request Timeout"},
+        {409,  "Conflict"},
+        {410,  "Gone"},
+        {411,  "Length Required"},
+        {412,  "Precondition Failed"},
+        {413,  "Payload Too Large"},
+        {414,  "URI Too Long"},
+        {415,  "Unsupported Media Type"},
+        {416,  "Range Not Satisfiable"},
+        {417,  "Expectation Failed"},
+        {418,  "I'm a teapot"},
+        {421,  "Misdirected Request"},
+        {422,  "Unprocessable Entity"},
+        {423,  "Locked"},
+        {424,  "Failed Dependency"},
+        {425,  "Too Early"},
+        {426,  "Upgrade Required"},
+        {428,  "Precondition Required"},
+        {429,  "Too Many Requests"},
+        {431,  "Request Header Fields Too Large"},
+        {451,  "Unavailable For Legal Reasons"},
+        {500,  "Internal Error"},
+        {501,  "Not Implemented"},
+        {502,  "Bad Gateway"},
+        {503,  "Service Unavailable"},
+        {504,  "Gateway Timeout"},
+        {505,  "HTTP Version Not Supported"},
+        {506,  "Variant Also Negotiates"},
+        {507,  "Insufficient Storage"},
+        {508,  "Loop Detected"},
+        {510,  "Not Extended"},
+        {511,  "Network Authentication Required"}
+    };
+
+    static inline std::string getStatusDesc(int status) {
+        auto it = _status_msg.find(status);
+        if (it == _status_msg.end()) {
+            return "Internal Error";
+        }
+        return it->second;
+    }
+
+    static inline bool readFile(const std::string &path, std::string &body) {
+        std::ifstream ifs(path, std::ios::binary);
+        if (ifs.is_open() == false) {
+            return false;
+        }
+        ifs.seekg(std::ios::end); //读写指针跳转到文件末尾
+        size_t len = ifs.tellg(); //获取偏移量--文件大小
+        ifs.seekg(std::ios::beg); //重新跳转到起始位置
+        //为body申请足够的空间
+        body.resize(len);
+        //读取文件所有数据到body中
+        ifs.read(&body[0], len);
+        if (ifs.good() == false) {
+            ifs.close();
+            return false;
+        }
+        ifs.close();
+        return true;
+    }
+    static const std::unordered_map<std::string, std::string> _mime_msg = {
+        {".aac",        "audio/aac"},
+        {".abw",        "application/x-abiword"},
+        {".arc",        "application/x-freearc"},
+        {".avi",        "video/x-msvideo"},
+        {".azw",        "application/vnd.amazon.ebook"},
+        {".bin",        "application/octet-stream"},
+        {".bmp",        "image/bmp"},
+        {".bz",         "application/x-bzip"},
+        {".bz2",        "application/x-bzip2"},
+        {".csh",        "application/x-csh"},
+        {".css",        "text/css"},
+        {".csv",        "text/csv"},
+        {".doc",        "application/msword"},
+        {".eot",        "application/vnd.ms-fontobject"},
+        {".epub",       "application/epub+zip"},
+        {".gif",        "image/gif"},
+        {".htm",        "text/html"},
+        {".html",       "text/html"},
+        {".ico",        "image/vnd.microsoft.icon"},
+        {".ics",        "text/calendar"},
+        {".jar",        "application/java-archive"},
+        {".jpeg",       "image/jpeg"},
+        {".jpg",        "image/jpeg"},
+        {".js",         "text/javascript"},
+        {".json",       "application/json"},
+        {".mp3",        "audio/mpeg"},
+        {".mpeg",       "video/mpeg"},
+        {".txt",        "text/plain"},
+        {".zip",        "application/zip"},
+        // .....
+    };
+    static inline std::string getMime(const std::string& ext){
+        auto it = _mime_msg.find(ext);
+        if (it == _mime_msg.end()) {
+            return "application/octet-stream"; //二进制流
+        }
+        return it->second;
     }
 }
 }
