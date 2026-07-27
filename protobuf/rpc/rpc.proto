@@ -1,0 +1,26 @@
+//RPC调用的整个定义主要包含两部分：
+// 1. 请求与响应的数据结构定义
+// 2. 定义rpc相关的调用接口格式
+// 3. 编译proto生成C++代码
+syntax = "proto3";
+package calculate;
+
+//开启rpc接口生成选项
+option cc_generic_services = true;
+
+message AddRequest {
+    int32 num1 = 1;
+    int32 num2 = 2;
+}
+message AddResponse {
+    int32 result = 1;
+}
+
+service Calculate {
+    rpc Add(AddRequest) returns (AddResponse);
+    rpc Sub(AddRequest) returns (AddResponse);
+    rpc Mul(AddRequest) returns (AddResponse);
+}
+
+//protoc --cpp_out=./ --grpc_out=./ \
+//    --plugin=protoc-gen-grpc=`which grpc_cpp_plugin` rpc.proto
