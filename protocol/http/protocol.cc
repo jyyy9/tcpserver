@@ -5,7 +5,10 @@
 
 namespace proto{
 namespace http {
-    HttpProtocol::HttpProtocol(const std::string &wwwroot):_wwwroot(wwwroot){}
+    HttpProtocol::HttpProtocol(const std::string &wwwroot):_wwwroot(wwwroot){
+        //防止静态资源根目录不存在
+        std::filesystem::create_directories(wwwroot);
+    }
     HttpProtocol::~HttpProtocol() = default;
     // 向路由表中，添加一个get方法的，请求-回调映射信息
     void HttpProtocol::Get(const std::string& pattern, const ServerCallback &cb) {
@@ -26,16 +29,15 @@ namespace http {
     }
     // ...
     void HttpProtocol::setController(net::TcpConnectionPtr conn) {
-        std::shared_ptr<HttpController> cntl(new HttpController);
+        HttpControllerPtr cntl(new HttpController);
         conn->setContext(cntl);
     }
-    // 请求处理-- 用于服务端
-    // void HttpProtocol::handleRequest(net::TcpConnectionPtr, 
-    //     net::Buffer*, net::Timestamp)
-    // 响应处理-- 用于客户端
-    // void HttpProtocol::handleResponse(net::TcpConnectionPtr, 
-    //     net::Buffer*, net::Timestamp) = 0;
-    void HttpProtocol::dispatch(ControllerPtr cntl) {
+    // ...
+    ControllerPtr HttpProtocol::getController(net::TcpConnectionPtr conn) {
+        HttpControllerPtr cntl = std::any_cast<HttpControllerPtr>(conn->getContext());
+        return cntl;
+    }
+    void HttpProtocol::dispatchRequest(ControllerPtr cntl) {
         HttpControllerPtr httpCntl = std::dynamic_pointer_cast<HttpController>(cntl);
         assert(httpCntl);
         //静态资源处理
@@ -45,20 +47,31 @@ namespace http {
         ret = routeHandler(httpCntl);
         //上述两个都没有处理成功，则返回404
         if (ret == true) return;
-        httpCntl->setStatus(404);
+        httpCntl->response()->setStatus(404);
     }
+    void HttpProtocol::dispatchResponse(ControllerPtr){}
+    
+    void HttpProtocol::setConnection(net::TcpConnectionPtr){}
+    // 请求处理-- 用于服务端
+    // void HttpProtocol::handleRequest(net::TcpConnectionPtr, 
+    //     net::Buffer*, net::Timestamp)
+    // 响应处理-- 用于客户端
+    // void HttpProtocol::handleResponse(net::TcpConnectionPtr, 
+    //     net::Buffer*, net::Timestamp) = 0;
     
     bool HttpProtocol::fileHandler(HttpControllerPtr cntl) {
-        // 1. 将请求的i资源路径转换为实际的文件存储路径
-        //      将相对根目录转换为实际的存储路径
+        // 1. 将请求的资源路径转换为实际的文件存储路径
         auto request = cntl->request();
         auto response = cntl->response();
         std::string realpath = _wwwroot + request->getPath();
-        // 2. 转换后的文件路径，是否是一个目录则返回false
+        // 2. 如果路径恰好指向目录，尝试加载 index.html
         if (std::filesystem::is_directory(realpath) == true) {
-            return false;
+            if (realpath.back() != '/') {
+                realpath.push_back('/');
+            }
+            realpath += "index.html";
         }
-        // 3. 读取文件数据，到response的_body中
+        // 3. 读取文件数据，到 response 的 _body 中
         bool ret = readFile(realpath, response->body());
         if (ret == false) {
             return false;

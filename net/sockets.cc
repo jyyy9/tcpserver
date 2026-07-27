@@ -104,12 +104,16 @@ namespace net {
         addr->sin_family = AF_INET;
     }
 
-    InetAddress::InetAddress(){}
+    InetAddress::InetAddress(){
+        std::memset(&_addr, 0, sizeof(_addr));
+    }
      //提供给服务器端
     InetAddress::InetAddress(int port) {
+        std::memset(&_addr, 0, sizeof(_addr));
         sockets::fromIpPort("0.0.0.0", port, &_addr);
     }
     InetAddress::InetAddress(const std::string &ip, int port) {
+        std::memset(&_addr, 0, sizeof(_addr));
         sockets::fromIpPort(ip.c_str(), port, &_addr);
     }
     const struct sockaddr* InetAddress::getAddress() const {

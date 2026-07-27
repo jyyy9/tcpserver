@@ -193,6 +193,9 @@ namespace net {
     }
     // 获取负载均衡后的派发事件循环对象指针，若池化数量为0，则返回主事件循环
     EventLoop* EventLoopThreadPool::nextLoop() {
+         if (_loops.empty())  {
+            return _baseloop;
+        }
         // 根据_nextIdx，获取数组_loops元素； 获取完毕后对_nextIdx重置
         EventLoop* loop = _loops[_nextIdx++];
         if (_nextIdx >= _loops.size()) {

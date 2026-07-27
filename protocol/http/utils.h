@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <filesystem>
 
 namespace proto {
 namespace http {
@@ -315,9 +316,10 @@ namespace http {
         if (ifs.is_open() == false) {
             return false;
         }
-        ifs.seekg(std::ios::end); //读写指针跳转到文件末尾
-        size_t len = ifs.tellg(); //获取偏移量--文件大小
-        ifs.seekg(std::ios::beg); //重新跳转到起始位置
+        //ifs.seekg(std::ios::end); //读写指针跳转到文件末尾
+        //size_t len = ifs.tellg(); //获取偏移量--文件大小
+        //ifs.seekg(std::ios::beg); //重新跳转到起始位置
+        size_t len = std::filesystem::file_size(path);
         //为body申请足够的空间
         body.resize(len);
         //读取文件所有数据到body中

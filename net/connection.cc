@@ -138,6 +138,7 @@ namespace net {
             // 2. 调用_messageCallback对缓冲区中的数据进行业务处理
             if (_messageCallback) _messageCallback(shared_from_this(), &_inputBuffer, recvTime);
         }else if (ret == 0) {
+            // LOG_DEBUG("连接断开.....");
             handleClose();
         }else {
             LOG_ERROR("读取数据出错: %s", strerror(errno));

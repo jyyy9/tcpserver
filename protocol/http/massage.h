@@ -1,7 +1,7 @@
 /*
     从Message派生出HTTP请求以及响应消息类
 */
-
+#pragma once
 #include <sstream>
 #include <unordered_map>
 #include <regex>
@@ -14,10 +14,6 @@
 
 namespace proto {
 namespace http {
-    class Request;
-    class Response;
-    using RequestPtr = std::shared_ptr<Request>;
-    using ResponsePtr = std::shared_ptr<Response>;
     class HttpRequest {
         public:
             HttpRequest();
@@ -50,6 +46,7 @@ namespace http {
             bool isKeepAlive() ;
             // 设置请求头
             void setHeader(std::string key, std::string value);
+            std::optional<std::string> header(const std::string &key);
             // 获取请求头
             const std::unordered_map<std::string, std::string>& getHeaders() const;
             // 获取查询参数
@@ -83,11 +80,14 @@ namespace http {
             const std::unordered_map<std::string, std::string>& headers() const;
             size_t getContentLength();
             bool isKeepAlive();
+
         public:
             int _status; //响应状态码
             std::string _version;// 协议版本  HTTP/1.1
             std::string _body; //响应正文
             std::unordered_map<std::string, std::string> _headers;// 请求头
     };
+    using HttpRequestPtr = std::shared_ptr<HttpRequest>;
+    using HttpResponsePtr = std::shared_ptr<HttpResponse>;
 }
 }

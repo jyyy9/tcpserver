@@ -1,12 +1,10 @@
 #include "../protocol.h"
+#include "controller.h"
+#include "message.h"
 #include <regex>
 
 namespace proto {
 namespace http {
-    class HttpRequest;
-    class HttpResponse;
-    using HttpRequestPtr = std::shared_ptr<HttpRequest>;
-    using HttpResponsePtr = std::shared_ptr<HttpResponse>;
     class HttpProtocol : public Protocol {
         public:
             using ServerCallback = std::function<void(const HttpRequestPtr, HttpResponsePtr)>;
@@ -19,13 +17,10 @@ namespace http {
             void Delete(const std::string& pattern, const ServerCallback &cb);
             // ...
             virtual void setController(net::TcpConnectionPtr conn) override;
-            // 请求处理-- 用于服务端
-            // virtual void handleRequest(net::TcpConnectionPtr, 
-            //     net::Buffer*, net::Timestamp) override;
-            // // 响应处理-- 用于客户端
-            // virtual void handleResponse(net::TcpConnectionPtr, 
-            //     net::Buffer*, net::Timestamp) override;
-            virtual void dispatch(ControllerPtr) override;
+            virtual ControllerPtr getController(net::TcpConnectionPtr conn) override;
+            virtual void dispatchRequest(ControllerPtr) override;
+            virtual void dispatchResponse(ControllerPtr) override;
+            virtual void setConnection(net::TcpConnectionPtr) override;
         private:
             bool fileHandler(HttpControllerPtr);
             bool routeHandler(HttpControllerPtr);

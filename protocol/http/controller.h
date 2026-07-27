@@ -18,48 +18,23 @@ namespace http {
         public:
             HttpController();
             ~HttpController();
+            State state();
+            void setState(State state);
             bool recvComplete() const override;
-            void recvRequest(net::Buffer* buffer) override {
-                switch (_state) {
-                    case LINE_RECVING:
-                        recvRequestLine(buffer);
-                        if(isOk() == false) break;
-                    case HEAD_RECVING:
-                        recvRequestHead(buffer);
-                        if(isOk() == false) break;
-                    case BODY_RECVING:
-                        recvRequestBody(buffer);
-                        if(isOk() == false) break;
-                }
-            }
-            void recvResponse(net::Buffer* buffer) override {
-                switch (_state) {
-                    case LINE_RECVING:
-                        recvResponseLine(buffer);
-                        if(isOk() == false) break;
-                    case HEAD_RECVING:
-                        recvResponseHead(buffer);
-                        if(isOk() == false) break;
-                    case BODY_RECVING:
-                        recvResponseBody(buffer);
-                        if(isOk() == false) break;
-                }
-            }
+            void recvRequest(net::Buffer* buffer) override;
+            void recvResponse(net::Buffer* buffer) override;
             void sendResponse(net::TcpConnectionPtr) override;
             // 客户端一套操作
             void sendRequest(net::TcpConnectionPtr) override;
-            static void sendRequest(net::TcpConnectionPtr, HttpRequest*);
-            void reset() override {
-                _state = LINE_RECVING;
-                _request.reset(new HttpRequest);
-                _response.reset(new HttpResponse);
-            }
+            void reset() override;
             std::shared_ptr<HttpRequest> request() { return _request; }
             std::shared_ptr<HttpResponse> response() { return _response; }
+            static void sendRequest(net::TcpConnectionPtr, HttpRequest*);
         private:
-            std::string serializeResponseLine(const HttpResponse& response);
-            std::string serializeRequestLine(const HttpRequest& request);
-            std::string serializeHead(const std::unordered_map<std::string, std::string>& headers);
+            static std::string serializeResponseLine(const HttpResponse& response);
+            static std::string serializeRequestLine(const HttpRequest& request);
+            static std::string serializeHead(const std::unordered_map<std::string, std::string>& headers);
+            void recvRequestLine(net::Buffer* buffer) ;
             void recvRequestHead(net::Buffer* buffer) ;
             void recvRequestBody(net::Buffer* buffer) ;
 

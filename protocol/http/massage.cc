@@ -50,6 +50,13 @@ namespace http {
     void HttpRequest::setHeader(std::string key, std::string value) { 
         _headers[key] = value; 
     }
+    std::optional<std::string> HttpRequest::header(const std::string &key) {
+        auto it = _headers.find(key);
+        if (it == _headers.end()) {
+            return std::nullopt;
+        }
+        return it->second;
+    }
     // 获取请求头
     const std::unordered_map<std::string, std::string>& HttpRequest::getHeaders() const { 
         return _headers; 
@@ -69,7 +76,7 @@ namespace http {
     }
     
 
-    HttpResponse::HttpResponse() {}
+    HttpResponse::HttpResponse() : _status(200){}
     HttpResponse::~HttpResponse() = default;
     void HttpResponse::setStatus(int status) { _status = status; }
     int HttpResponse::status() { return _status; }
@@ -77,8 +84,7 @@ namespace http {
         _version = version; 
     }
     const std::string& HttpResponse::version() { return _version; }
-    void HttpResponse::setBody(const std::string& body, 
-        const std::string &ct="text/html") {
+    void HttpResponse::setBody(const std::string& body, const std::string &ct) {
         _body = body;
         _headers["Content-Type"] = ct;
     }

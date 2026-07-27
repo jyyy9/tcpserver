@@ -11,28 +11,121 @@ namespace http {
         _request.reset();
         _response.reset();
     }
+    void HttpController::reset() {
+        _state = LINE_RECVING;
+        _request.reset(new HttpRequest);
+        _response.reset(new HttpResponse);
+    }
     bool HttpController::recvComplete() const  { 
         return _state == RECV_COMPLATED;
     }
     
-    void HttpController::recvRequest(net::Buffer* buf)  {
+    void HttpController::recvRequest(net::Buffer* buffer) {
+        switch (_state) {
+            case LINE_RECVING:
+                recvRequestLine(buffer);
+                if(isOk() == false) break;
+            case HEAD_RECVING:
+                recvRequestHead(buffer);
+                if(isOk() == false) break;
+            case BODY_RECVING:
+                recvRequestBody(buffer);
+                if(isOk() == false) break;
+        }
+    }
+    void HttpController::recvResponse(net::Buffer* buffer)  {
+        switch (_state) {
+            case LINE_RECVING:
+                recvResponseLine(buffer);
+                if(isOk() == false) break;
+            case HEAD_RECVING:
+                recvResponseHead(buffer);
+                if(isOk() == false) break;
+            case BODY_RECVING:
+                recvResponseBody(buffer);
+                if(isOk() == false) break;
+        }
     }
     void HttpController::sendResponse(net::TcpConnectionPtr conn)  {
-    }
-    void HttpController::recvResponse(net::Buffer* buf)  {
+        if (_response->_version.empty()) {
+            _response->setVersion(_request->getVersion());
+        }
+        auto content_length = _response->header("Content-Length");
+        if (!content_length) {
+            if (_response->_body.empty()) {
+                _response->setHeader("Content-Length", std::to_string(0));
+            }else {
+                _response->setHeader("Content-Length", std::to_string(_response->_body.size()));
+            }
+        }
+        auto connection = _response->header("Connection");
+        if (!connection) {
+            auto req_connection = _request->header("Connection");
+            if (req_connection) {
+                _response->setHeader("Connection", *req_connection);
+            }else {
+                //若是1.0则设置close，否则设置keep-alive
+                if (_response->_version == "HTTP/1.0") {
+                    _response->setHeader("Connection", "close");
+                }else {
+                    _response->setHeader("Connection", "keep-alive");
+                }
+            }
+        }
+
+        std::stringstream ss;
+        //1. 获取序列化后的响应首行
+        ss << serializeResponseLine(*_response.get());
+        //2. 获取序列化后的响应头部
+        ss << serializeHead(_response->_headers);
+        //3. 获取响应正文
+        ss << _response->_body;
+        //发送响应数据
+        // LOG_DEBUG("响应数据: [%s]", ss.str().c_str());
+        conn->send(ss.str());
     }
     void HttpController::sendRequest(net::TcpConnectionPtr conn)  {
+        return sendRequest(conn, _request.get());
     }
-
-
-
-    std::string serializeResponseLine(const HttpResponse& response) {
+    void HttpController::sendRequest(net::TcpConnectionPtr conn, HttpRequest* request) {
+        if (request->_version.empty()) {
+            request->setVersion("HTTP/1.1");
+        }
+        auto content_length = request->header("Content-Length");
+        if (!content_length) {
+            if (request->_body.empty()) {
+                request->setHeader("Content-Length", std::to_string(0));
+            }else {
+                request->setHeader("Content-Length", std::to_string(request->_body.size()));
+            }
+        }
+        
+        auto connection = request->header("Connection");
+        if (!connection) {
+            //若是1.0则设置close，否则设置keep-alive
+            if (request->_version == "HTTP/1.0") {
+                request->setHeader("Connection", "close");
+            }else {
+                request->setHeader("Connection", "keep-alive");
+            }
+        }
+        std::stringstream ss;
+        //1. 获取序列化后的请求首行
+        ss << serializeRequestLine(*request);
+        //2. 获取序列化后的请求头部
+        ss << serializeHead(request->_headers);
+        //3. 获取响应正文
+        ss << request->_body;
+        //发送响应数据
+        conn->send(ss.str());
+    }
+    std::string HttpController::serializeResponseLine(const HttpResponse& response) {
         std::stringstream ss;
         ss << response._version << " " << response._status << " ";
         ss << getStatusDesc(response._status) << "\r\n";
         return ss.str();
     }
-    std::string serializeRequestLine(const HttpRequest& request) {
+    std::string HttpController::serializeRequestLine(const HttpRequest& request) {
         std::stringstream ss;
         ss << request._method << " ";
         ss << request._path;
@@ -51,7 +144,7 @@ namespace http {
         ss << "\r\n";
         return ss.str();
     }
-    std::string serializeHead(const std::unordered_map<std::string, std::string>& headers) {
+    std::string HttpController::serializeHead(const std::unordered_map<std::string, std::string>& headers) {
         std::stringstream ss;
         for (auto &header : headers) {
             ss << header.first << ": " << header.second << "\r\n";
@@ -59,9 +152,9 @@ namespace http {
         ss << "\r\n";
         return ss.str();
     }
-    State state() { return _state; }
-    void setState(State state) { _state = state; }
-    void recvRequestLine(net::Buffer* buffer) {
+    State HttpController::state() { return _state; }
+    void HttpController::setState(State state) { _state = state; }
+    void HttpController::recvRequestLine(net::Buffer* buffer) {
         // GET /path?query=value HTTP/1.1  请求首行的处理
         if (_state != LINE_RECVING) return;
         // LOG_DEBUG("recvLine .....");
@@ -79,7 +172,7 @@ namespace http {
         }
         // get /path?query=value HTTP/1.1
 
-        std::regex re(R"(^([A-Z]+)\s+(/[^?#]*)(\?([^#\s]*))?\s+HTTP/(\d+\.\d+)$)");
+        std::regex re(R"(^([A-Z]+)\s+(/[^?#]*)(\?([^#\s]*))?\s+(HTTP/\d+\.\d+)$)");
         std::smatch match;
         if (std::regex_match(*line, match, re)) {
             const std::string method = match[1].str();
@@ -133,7 +226,7 @@ namespace http {
         }
         setState(HEAD_RECVING); // 切换到请求头接收状态
     }
-    void recvRequestHead(net::Buffer* buffer) {
+    void HttpController::recvRequestHead(net::Buffer* buffer) {
         if (_state != HEAD_RECVING) return ;
         while(true) {
             //1. 获取一行数据
@@ -168,7 +261,7 @@ namespace http {
             _request->_headers[key] = val;
         }
     }
-    void recvRequestBody(net::Buffer* buffer) {
+    void HttpController::recvRequestBody(net::Buffer* buffer) {
         if (_state != BODY_RECVING) return ;
         // 从缓冲区中取出数据，放到_body中
         // 1. 通过头部字段中的Content-Length获取正文长度
@@ -188,7 +281,8 @@ namespace http {
         }
     }
 
-    void recvResponseLine(net::Buffer* buf) {
+    void HttpController::recvResponseLine(net::Buffer* buf) {
+        if (_state != LINE_RECVING) return ;
         auto line = buf->getline();
         if (!line && buf->readAbleBytes() >= KMaxLine) {
             setOk(false);
@@ -209,7 +303,8 @@ namespace http {
         _response->_status = std::stoi(lineArr[1]); //"200" -> 200
         setState(HEAD_RECVING);
     }
-    void recvResponseHead(net::Buffer* buf) {
+    void HttpController::recvResponseHead(net::Buffer* buf) {
+        if (_state != HEAD_RECVING) return ;
         while(true) {
             //1. 获取一行数据
             auto line = buf->getline();
@@ -242,7 +337,7 @@ namespace http {
             _response->_headers[key] = val;
         }
     }
-    void recvResponseBody(net::Buffer* buf) {
+    void HttpController::recvResponseBody(net::Buffer* buf) {
         if (_state != BODY_RECVING) return ;
         size_t totalLen = _response->getContentLength();
         if (totalLen == 0) {
