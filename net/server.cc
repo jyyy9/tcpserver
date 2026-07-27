@@ -21,7 +21,7 @@ namespace net {
     //启动服务器的接口--开始监听，获取新链接进行处理,启动事件循环池
     void TcpServer::start(){
         _pool.start(); 
-        _acceptor.listen();
+         _baseloop->runInLoop(std::bind(&Acceptor::listen, &_acceptor));
     }
     // 设置给acceptor的新链接处理回调函数: 
     //   为描述符构造connection对象，添加链接对象管理, 设置回调函数，调用connectEstablished
@@ -33,7 +33,7 @@ namespace net {
         conn->setConnectionCallback(_connectionCallback);
         conn->setMessageCallback(_messageCallback);
         conn->setCloseCallback(std::bind(&TcpServer::removeConnection, this, std::placeholders::_1));
-        ioLoop->runInLoop(std::bind(TcpConnection::connectEstablished, conn));
+        ioLoop->runInLoop(std::bind(&TcpConnection::connectEstablished, conn));
     }
     // 链接关闭时的回调函数，设置给connection的closeCallback
     //   1. 移除连接管理 ；  2. 调用connection的connectDestroyed

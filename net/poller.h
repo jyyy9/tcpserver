@@ -8,6 +8,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include<sys/epoll.h>
 
 namespace net {
     class Channel;
@@ -21,6 +22,9 @@ namespace net {
     static const int kNoneEvent = 0;
     static const int kReadEvent = EPOLLIN | EPOLLPRI;
     static const int kWriteEvent = EPOLLOUT;
+    static const int kErrorEvent = EPOLLERR;
+    static const int kCloseEvent = EPOLLHUP;
+
     // muduo库中将描述符的监控+管理分开了
     //   解除事件监控：只epoll_ctl解除监控，但是不移_channels除管理
     //   移除监控管理：既解除监控又从_channels中移除管理
@@ -35,7 +39,7 @@ namespace net {
             // 解除并移除监控，并移除管理
             virtual void removeChannel(Channel *channel) = 0;
 
-             static PollerPtr defaultPoller();
+            static Poller* defaultPoller();
         protected:
             std::unordered_map<int, Channel*> _channels;
     };

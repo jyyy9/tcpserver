@@ -1,13 +1,14 @@
 #include "sockets.h"
 #include "log.h"
 #include <cstring>
+#include <cstdio>
 #include <errno.h>
-#include<cstdio>
 #include <sys/uio.h>
+#include <linux/tcp.h>
 
 namespace net {
     // 创建非阻塞套接字，失败则抛异常
-    int sockets::createSocket(sa_family_t family, bool block) {
+    int sockets::createSocket( bool block) {
         int32_t flag;
         if (block) {
             flag = SOCK_STREAM | SOCK_CLOEXEC;
@@ -29,36 +30,7 @@ namespace net {
     }
     // 直接返回系统调用即可，失败由外部处理
     int sockets::connect(int sockfd, const struct sockaddr* addr) {
-        int ret = ::connect(sockfd, addr, sizeof(*addr));
-        int errNo = ret < 0 ? errno : 0;
-        if (ret < 0) {
-            switch(errNo) {
-                case 0: //成功的情况
-                case EISCONN: //该套接字连接已完成
-                case EINPROGRESS: //连接正在进行中
-                    break;
-                case EACCES: 
-                case EPERM:  //权限不足
-                case EADDRNOTAVAIL: //地址信息无效
-                case EAFNOSUPPORT: // 地址域类型暂不支持
-                case EBADF: //坏的文件描述符
-                case EFAULT: //地址空间不够用了
-                case ENOTSOCK: // 这不是一个套接字描述符
-                case EPROTOTYPE: //套接字类型错误，比如使用udp连接tcp服务器
-                    LOG_FATAL("连接服务器失败: %s", strerror(errno));
-                    return errNo;
-                case EADDRINUSE: //地址被占用
-                case EAGAIN:  //资源暂时不足
-                case EALREADY: //该套接字之前的连接未完成
-                case ECONNREFUSED: // 连接被拒绝-服务端未启动
-                case EINTR: // 阻塞操作被信号打断
-                case ENETUNREACH: //网络不可达
-                case ETIMEDOUT: //连接超时
-                    LOG_ERROR("连接服务器失败: %s", strerror(errno));
-                    break;
-            }
-        }
-        return ret;
+        return ::connect(sockfd, addr, sizeof(*addr));
     }
     // 开始监听套接字，失败抛异常
     void sockets::listen(int sockfd) {
@@ -92,7 +64,9 @@ namespace net {
                 case ENOTSOCK: //描述符不是套接字描述符
                 case EOPNOTSUPP: //当前描述符不是一个流式套接字
                     LOG_FATAL("获取新连接失败: %s", strerror(errno));
-default:
+                    default:
+                    LOG_FATAL("获取新连接失败: %s", strerror(errno));
+                    break;
 
             }
         }
@@ -115,12 +89,91 @@ default:
     void sockets::close(int fd) {
         if (fd >= 0) ::close(fd);
     }
-    // 转换为：192.168.1.1:8080 ->inet_ntop
-    void sockets::toIpPort(char* buf, size_t size, const struct sockaddr_in* addr);
-    // 转为网络字节序地址结构数据 inet_pton
-    //
-    void sockets::fromIpPort(const char* ip, uint16_t port, struct sockaddr_in* addr)
-    {
-        
+        // 转换为：网络字节序相关的信息 -》192.168.1.1:8080 
+    void sockets::toIpPort(char* buf, size_t size, const struct sockaddr_in* addr) {
+        // inet_ntop(int af, const void *src, char *dst, socklen_t size)
+        inet_ntop(AF_INET, &addr->sin_addr.s_addr, buf, size);
+        uint16_t port = ntohs(addr->sin_port);
+        snprintf(buf + strlen(buf), size - strlen(buf), ":%d", port);
+    }
+    // 转换接口：从字符串IP地址+端口，转换为网络字节序相关的数据
+    void sockets::fromIpPort(const char* ip, uint16_t port, struct sockaddr_in* addr){
+        // inet_pton(AF_INET, ip, &addr->sin_addr.s_addr)
+        addr->sin_addr.s_addr = inet_addr(ip);
+        addr->sin_port = htons(port); //htonl
+        addr->sin_family = AF_INET;
+    }
+
+    InetAddress::InetAddress(){}
+     //提供给服务器端
+    InetAddress::InetAddress(int port) {
+        sockets::fromIpPort("0.0.0.0", port, &_addr);
+    }
+    InetAddress::InetAddress(const std::string &ip, int port) {
+        sockets::fromIpPort(ip.c_str(), port, &_addr);
+    }
+    const struct sockaddr* InetAddress::getAddress() const {
+        return (struct sockaddr*)&_addr;
+    }
+    void InetAddress::setAddress(struct sockaddr_in addr) {
+        _addr = addr;
+    }
+    std::string InetAddress::toIpPort() const {
+        char tmp[32];
+        sockets::toIpPort(tmp, 32, &_addr);
+        return tmp;
+    }
+
+    Socket::Socket(int sockfd): _sockfd(sockfd) {}
+    // 关闭套接字
+    Socket::~Socket() { sockets::close(_sockfd); }
+    int Socket::fd() { return _sockfd; }
+    void Socket::bind(const InetAddress& addr) {
+        sockets::bind(_sockfd, addr.getAddress());
+    }
+    // 获取新连接对应描述符以及客户端的地址信息
+    int Socket::accept(InetAddress* addr) {
+        struct sockaddr_in peerAddr;
+        int newfd = sockets::accept(_sockfd, &peerAddr);
+        if (newfd >= 0) {
+            addr->setAddress(peerAddr);
+        }
+        return newfd;
+    }
+    void Socket::listen() {
+        return sockets::listen(_sockfd);
+    }
+    // IPPROTO_TCP， TCP_NODELAY
+    void Socket::setTcpNoDelay(bool on) {
+        // int setsockopt(int sockfd, int level, int optname, void *optval, socklen_t optlen)
+        int opt = 1;
+        int ret = setsockopt(_sockfd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
+        if (ret < 0) {
+            LOG_ERROR("setsockopt TCP_NODELAY 错误");
+        }
+    }
+    // SOL_SOCKET， SO_REUSEADDR
+    void Socket::setReuseAddr(bool on) {
+        int opt = 1;
+        int ret = setsockopt(_sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+        if (ret < 0) {
+            LOG_ERROR("setsockopt SO_REUSEADDR 错误");
+        }
+    }
+    // SOL_SOCKET， SO_REUSEPORT
+    void Socket::setReusePort(bool on) {
+        int opt = 1;
+        int ret = setsockopt(_sockfd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
+        if (ret < 0) {
+            LOG_ERROR("setsockopt SO_REUSEPORT 错误");
+        }
+    }
+    // SOL_SOCKET， SO_KEEPALIVE
+    void Socket::setKeepAlive(bool on) {
+        int opt = 1;
+        int ret = setsockopt(_sockfd, SOL_SOCKET, SO_KEEPALIVE, &opt, sizeof(opt));
+        if (ret < 0) {
+            LOG_ERROR("setsockopt SO_KEEPALIVE 错误");
+        }
     }
 }

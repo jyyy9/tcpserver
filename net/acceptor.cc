@@ -9,8 +9,8 @@ namespace net {
         , _socket(_sockfd)
         , _channel(_sockfd, loop)
         , _idlefd(::open("/dev/null", O_CLOEXEC | O_WRONLY)) {
-        _socket.bind(addr);
         _socket.setReuseAddr(true);
+        _socket.bind(addr);
         _channel.setReadCallback(std::bind(&Acceptor::handleRead, this, std::placeholders::_1));
     }
     // 接触socketfd的事件监控，并关闭idlefd

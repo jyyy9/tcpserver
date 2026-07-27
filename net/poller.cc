@@ -18,9 +18,9 @@ namespace net {
         return fd;
     }
 
-    PollerPtr Poller::defaultPoller(){
-        std::shared_ptr<EpollPoller> ptr(new EpollPoller());
-        return ptr;
+    Poller* Poller::defaultPoller(){
+        Poller *poller = new EpollPoller;
+        return poller;
     }
     // 针对成员进行初始化_epfd
     EpollPoller::EpollPoller() 
@@ -34,18 +34,20 @@ namespace net {
         int ret = epoll_wait(_epfd, &_evs[0], _evs.size(), EPOLL_TIMEOUT);
         if (ret < 0) {
             LOG_ERROR("epoll_wait出错: %s", strerror(errno));
-            return;
+            return now;
         } else if (ret == 0) {
-            LOG_DEBUG("EPOLL WAIT 超时");
-            return;
+            //LOG_DEBUG("EPOLL WAIT 超时");
+            return now;
         }
         for (int i = 0; i < ret; ++i) {
             Channel* channel = (Channel*)_evs[i].data.ptr;
             channel->setRevents(_evs[i].events);
+            actives.push_back(channel);
         }
         if (ret == _evs.size()) { //就绪事件数组打满了
             _evs.resize(_evs.size() * 2);
         }
+        return now;
     }
     const char* EpollPoller::eventStr(int op) {
         switch(op){
@@ -83,6 +85,7 @@ namespace net {
                 assert(_channels.find(fd) != _channels.end());
                 assert(_channels[fd] == channel);
             }
+             // LOG_DEBUG("添加监控：%d", fd);
             update(EPOLL_CTL_ADD, channel);
             channel->setState(kAdded);
         }else {

@@ -11,10 +11,11 @@
 #include <iostream>
 #include <functional>
 #include <stdint.h>
+#include "poller.h"
+#include "timestamp.h"
 
 namespace net
 {
-    class Timestamp;
     class EventLoop;
     using ReadCallback = std::function<void(Timestamp)>;
     using EventCallback = std::function<void()>;
@@ -34,7 +35,7 @@ namespace net
         void setState(ChannelState state) { _state = state; }
         uint32_t events() { return _events; }
         void setRevents(uint32_t e) { _revents = e; }
-        void setTie(std::shared_ptr<void> &obj)
+        void setTie(const std::shared_ptr<void> &obj) { _tied = true; _tie = obj; }
         {
             _tied = true;
             _tie = obj;
@@ -45,8 +46,8 @@ namespace net
         void setCloseCallback(EventCallback cb) { _closeCallback = std::move(cb); }
         // 判断当前描述符是否处于无事件/写/读监控状态
         bool isNoneEvent() const { return _events == kNoneEvent; }
-        bool isWriting() const { return _events == kWriteEvent; }
-        bool isReading() const { return _events == kReadEvent; }
+        bool isWriting() const { return _events & kWriteEvent; }
+        bool isReading() const { return _events & kReadEvent; }
         // 对当前描述符进行读事件操作
         void enableReading()
         {
@@ -99,7 +100,8 @@ namespace net
             _eventHandling = true;
             // 在这个函数中，根据实际就绪的事件，调用不同的回调函数进行事件处理
             // 就绪了连接挂断事件，且当前没有新数据到来，直接调用关闭回调
-            if (_revents & EPOLLHUP && !(_revents & kReadEvent))
+
+            if (_revents & kCloseEvent && !(_revents & kReadEvent))
             {
                 if (_closeCallback)
                     _closeCallback();
@@ -114,7 +116,7 @@ namespace net
                 if (_writeCallback)
                     _writeCallback();
             }
-            if (_revents & EPOLLERR)
+            if (_revents & kErrorEvent)
             {
                 if (_errorCallback)
                     _errorCallback();
@@ -139,5 +141,6 @@ namespace net
         ReadCallback _readCallback;
         EventCallback _writeCallback;
         EventCallback _errorCallback;
+        EventCallback _closeCallback;
     };
 }

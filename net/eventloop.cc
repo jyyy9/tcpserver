@@ -45,6 +45,8 @@ namespace net {
         _wakeupChannel->enableReading(); //启动weakupfd的读事件监控
     }
     EventLoop::~EventLoop(){
+         _wakeupChannel->disableAll();
+        _wakeupChannel->remove();
         ::close(_wakeupFd);
     }
     // 对channel进行事件监控操作的接口

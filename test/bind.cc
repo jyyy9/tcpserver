@@ -1,6 +1,29 @@
 #include <functional>
 #include <iostream>
 
+template<T>
+class enable_shared_from_this {
+    public:
+        enable_shared_from_this(std::shared_ptr<T> obj);
+
+        std::shared_ptr<T> shared_from_this() {
+            return _ptr.lock();
+        }
+    private:
+        std::weak_ptr<T> _ptr;
+};
+
+std::bind(&TcpConnection::sendInLoop, this, buf)
+
+class temp {
+    public:
+        operator()(params1, params2) {
+
+        }
+    private:
+        functor;
+}
+
 int add(int num1, int num2)
 {
     return num1 + num2;
