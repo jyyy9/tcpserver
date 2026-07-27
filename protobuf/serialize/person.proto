@@ -1,0 +1,84 @@
+syntax = "proto3"; //语法版本声明
+
+package person;   //包名，对应到C++就是命名空间-避免命名冲突
+
+enum StuType {
+    NORMAL = 0;
+    CADRE = 2;
+}
+
+message Student {
+    int32 sn = 1;
+    string name = 2;
+    repeated string hobby = 3;
+    map<string, float> score = 4;
+    StuType type = 5;
+    oneof test_oneof {
+        int32 weight = 6;
+        int32 height = 7;
+    }
+    optional string birth = 8; // 当前字段并不是一个必须存在的字段
+}
+
+message Contact {
+    repeated Student students = 1;
+}
+
+
+// protoc --cpp_out=./ person.proto
+/*
+namespace person {
+PROTOBUF_NAMESPACE_ID :  google::protobuf命名空间
+
+class Contact final :public ::PROTOBUF_NAMESPACE_ID::Message{
+    ::person::Student* mutable_students(); //构造了一个Student对象，并返回指针
+}
+
+class Student final :public ::PROTOBUF_NAMESPACE_ID::Message{
+    void clear_name();
+    const std::string& name() const;
+    void set_name(ArgT0&& arg0, ArgT... args);
+
+    void clear_sn();
+    int32_t sn() const;
+    void set_sn(int32_t value);
+
+    int hobby_size() const; //获取可重复字段的元素数量
+    void clear_hobby();
+    const std::string& hobby(int index) const;
+    std::string* mutable_hobby(int index);
+    void set_hobby(int index, const std::string& value);
+    std::string* add_hobby(); //创建了一个空元素，返回指针
+    void add_hobby(const std::string& value);
+
+    int score_size() const;  //键值对元素个数
+    void clear_score();
+    const ::google::protobuf::Map< std::string, float >& score() const;
+    ::google::protobuf::Map< std::string, float >* mutable_score();
+
+    bool has_weight() ;  //判断是否存在这个字段
+    void clear_weight();
+    void set_weight(int32_t value);
+    int32_t weight() const;
+
+    bool has_height() const;
+    void clear_height();
+    int32_t height() const;
+    void set_height(int32_t value);
+
+    bool has_birth() const; //optional修饰的字段会添加一个判断是否存在的接口
+    void clear_birth();
+    const std::string& birth() const;
+    void set_birth(ArgT0&& arg0, ArgT... args);
+    
+    //继承而来的序列化，反序列化接口
+    bool ParseFromString(ConstStringParam data);
+    bool ParseFromArray(const void* data, int size);
+
+    std::string SerializeAsString() const;
+    bool SerializeToString(std::string* output) const;
+    bool SerializeToArray(void* data, int size) const;
+}
+}
+
+*/
