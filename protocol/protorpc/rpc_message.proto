@@ -1,0 +1,18 @@
+syntax = "proto3";
+package rpc_message;
+
+//枚举消息类型
+enum MessageType {
+    ERROR = 0;
+    REQUEST = 1;
+    RESPONSE = 2;
+}
+enum ErrorCode {
+    NO_ERROR = 0;   //正确无错误
+    WRONG_PROTO = 1;//协议类型错误
+    NO_SERVICE = 2; //没有找到请求的服务
+    NO_METHOD = 3;  //没有找到请求的方法
+    INVALID_REQUEST = 4; //无效的请求
+    INVALID_RESPONSE = 5;//无效的响应
+    TIMEOUT = 6; //超时
+}
